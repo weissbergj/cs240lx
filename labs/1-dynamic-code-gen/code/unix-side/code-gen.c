@@ -56,7 +56,9 @@ void reloc_mark(code_t *c, int op, uint32_t l) {
 
 // walk through linking everything.
 void code_link(code_t *c) {
-    unimplemented();
+    // unimplemented();
+    //nothing to implement yet
+
 }
 
 uint32_t *code_push(code_t *c, uint32_t inst) {
@@ -69,17 +71,27 @@ uint32_t *code_push(code_t *c, uint32_t inst) {
 
 // load as four or's in dumb way.
 void load_imm32(code_t *c, uint8_t rd, uint32_t imm32) {
-    // load zero
-    if(!imm32)
-        unimplemented(); 
-    
-    // load all 1s.
-    if(imm32 == ~0)
-        unimplemented(); 
-    
+    //load 0
+    if(!imm32) {
+        // unimplemented(); 
+        code_push(c, arm_add_imm8(rd, arm_r0, 0)); 
+        return;
+    }
+    // load all 1s
+    if(imm32 == ~0) {
+        // unimplemented(); 
+        // mvn rd, #0 => 0xe3e00000 | (rd<<12)
+        code_push(c, 0xe3e00000 | (rd << 12));
+        return;
+    }
+    code_push(c, arm_add_imm8(rd, arm_r0, 0));
+
     for(unsigned i = 0; i < 32; i += 8) {
-        uint8_t imm = (imm32>>i) & 0xff;
-        if(imm)
-            unimplemented();
+        uint8_t imm = (imm32 >> i) & 0xff;
+        if(imm) {
+            // unimplemented(); 
+            uint8_t rot = (32 - i) / 2;
+            code_push(c, arm_or_imm_rot(rd, rd, imm, rot));
+        }
     }
 }

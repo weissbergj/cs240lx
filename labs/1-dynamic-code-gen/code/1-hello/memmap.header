@@ -1,0 +1,84 @@
+/* memmap.header:
+ * linker script that: reserves 64 bytes at address 0x8000 for a header
+ *     (first 4 bytes = branch instruction, next ~60 for a string).
+ */
+
+SECTIONS {
+    /* Start everything at address 0x8000 (the usual Pi load addr). */
+    . = 0x8000;
+
+    /* 
+     * Define a ".header" section for 64 total bytes:
+     */
+    .header : {
+        /* Mark start of the header. */
+        __header_start__ = .;
+
+        /* ---- First 4 bytes: a 32-bit branch instruction. ----
+         *  0xea00000e is "b #60" if you disassemble on ARMv6, 
+         *  so it jumps ahead enough bytes to skip this header.
+         */
+        LONG(0xea00000e);
+
+        /* ---- Next ~60 bytes: embed a string using BYTE() ----
+         * can't use .ascii in a linker script, so:
+         */
+        BYTE(0x48); /* 'H' */
+        BYTE(0x65); /* 'e' */
+        BYTE(0x6C); /* 'l' */
+        BYTE(0x6C); /* 'l' */
+        BYTE(0x6F); /* 'o' */
+        BYTE(0x20); /* ' ' */
+        BYTE(0x68); /* 'h' */
+        BYTE(0x65); /* 'e' */
+        BYTE(0x61); /* 'a' */
+        BYTE(0x64); /* 'd' */
+        BYTE(0x65); /* 'e' */
+        BYTE(0x72); /* 'r' */
+        BYTE(0x21); /* '!' */
+        BYTE(0x00); /* '\0' */
+
+        /* 
+         * Pad the rest of the 64 bytes to fill out the header.
+         * 4 bytes used by LONG() for the branch
+         *  ~14 bytes for our string above
+         */
+        . = . + (64 - ( . - __header_start__ ));
+
+        __header_end__ = .;
+    }
+
+    /*
+     * PREIOUS HEADER BELOW
+     */
+    .text ALIGN(8) : {
+        __code_start__ = .;
+        KEEP(*(.text.boot))
+        *(.text*)
+        __code_end__ = .;
+        . = ALIGN(8);
+    }
+
+    /* read-only data */
+    .rodata : { *(.rodata*) }
+
+    /* writable data */
+    .data : {
+        __data_start__ = .;
+        *(.data*)
+        . = ALIGN(4);
+        __data_end__ = .;
+    }
+
+    /* bss section */
+    .bss : {
+        __bss_start__ = .;
+        *(.bss*)
+        *(COMMON)
+        . = ALIGN(8);
+        __bss_end__ = .;
+        . = ALIGN(8);
+        __prog_end__ = .;
+        __heap_start__ = .;
+    }
+}

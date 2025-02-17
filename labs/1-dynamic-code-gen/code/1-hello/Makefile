@@ -11,6 +11,8 @@ TEST_SRC := hello.c
 
 # to run all the tests.
 
+MEMMAP = memmap.header # copied libpi/memmap
+
 include $(CS240LX_2022_PATH)/libpi/mk/Makefile.template
 
 

@@ -1,0 +1,65 @@
+Overview
+- Reverse engineer ARM instructions by generating assembly,  extractingthe machine code, and comparing to hand‑created encodings. Then built small dynamic code generator that calls a function (hello()) by emitting and running ARM instructions at runtime. Then added 64-byte executable header to binaries (with a branch instruction plus embedded data) so the old bootloader would load them without changes, yet we could still store additional info at the start
+
+Files changed
+1. check-encodings.c (Part 1: Reverse Engineer Instructions)
+    * Added insts_emit() to feed short assembly snippets to the ARM cross‑compiler, capture the generated machine code, and return it as a 32‑bit value.
+    * Implemented manual instruction encoders (like arm_add) and “cross‑checker” logic to compare our encodings against insts_emit()’s bytes.
+    * Result: Verified our bit manipulations matched the assembler’s output, completing the reverse‑engineering work.
+
+CHECK-ENCODINGS.C Overview: Generates machine code from assembly and compares against arm cross compiler
+
+- Insts_emit(): creates temp files and runs cross-compiler and converts to .elf then .o then .bin via run_system calls; then puts this in bin and reads it and returns the pointer
+- inst_check(): helper function that gets gen from inst_emit and then checks char by char if they match
+- 
+
+
+OTHERS:
+1. Makefile and memmap.header (new linker script)
+    * Switched from hard‑coded /libpi/mk/Makefile.template to $(CS240LX_2022_PATH)/libpi/mk/Makefile.template.
+    * Created new MEMMAP to use custom linker script (memmap.header) to add a 64‑byte header
+    * 64‑byte .header section at address 0x8000: first 4 bytes store a branch instruction (LONG(0xea00000e)), the next 60 bytes store a string using BYTE(0xHH) directives
+    * Padded to 64 bytes
+    * CAN SEE RESULTS OF THIS AT TOP OF HELLO.LIST 
+2. hello.c (Parts 2 & header demonstration)
+    * Dynamic code generation logic that emits a short subroutine calling hello()
+    * Extern char __header_start__; to print data embedded in the new 64‑byte header (hdr_str = &__header_start__ + 4;).
+    * Printed “Header says: <Hello header!>” and “hello world,”
+3. 2-int-compiler/int_compile.c (optional Part 3: Interrupt Compiler)
+    * wrote a function dynamically generating a specialized dispatcher for multiple interrupt handlers
+    * The function was called int_compile
+    * Calls each interrupt handler in a row without loop overhead; not main compares these interrupt handlers
+    * BOOT:bootloader: Done.
+    * cost of generic-int calling: 27474 cycles (x10) <generic_call_int(intv,n)>
+    * cost of specialized int calling: 17921 cycles (x10) <specialized_call_int()>
+    * DONE!!!
+
+static void *int_compile(int_fp *intv, unsigned n) {
+    static uint32_t code[64];
+    unsigned idx = 0;
+
+    // push {lr} => store lr onto stack
+    code[idx++] = 0xe92d4000; // push {lr}
+
+    // for all but last: do a BL <handler>
+    for(unsigned i = 0; i < n - 1; i++) {
+        uint32_t pc = (uint32_t)&code[idx];
+        code[idx++] = arm_bl(pc, (uint32_t)intv[i]);
+    }
+
+    // pop {lr}
+    code[idx++] = 0xe8bd4000; // pop {lr}
+
+    // final call: do a B <handler> so it returns to original caller
+    {
+        uint32_t pc = (uint32_t)&code[idx];
+        code[idx++] = arm_b(pc, (uint32_t)intv[n - 1]);
+    }
+
+    // return the start of the code
+    return code;
+}
+
+Static array code holds ARM instructions, push {lr} is STMFD sp!, which is 0xe92d4000 for 32 bit; this saves the link register on the stack, branch with link handler loop for all but last handler, pop lr off stack 0xe8bd4000, branch without link directly to original caller’s LR
+
+More info: At a high level, this function builds a tiny piece of code on the fly that calls each interrupt handler in a row with minimal overhead, then returns to whoever invoked it. Normally, you might loop over an array of handler function pointers at runtime, but that adds extra branches and an indirect call for each. By statically unrolling the calls via direct BL instructions (and a final B), we save time and avoid mispredicted branches. We push LR at the start so that when all these handlers finish, we can pop LR and return cleanly to the original caller. Essentially, it’s a faster, specialized “dispatch” function that calls n interrupt handlers in sequence without extra looping overhead.

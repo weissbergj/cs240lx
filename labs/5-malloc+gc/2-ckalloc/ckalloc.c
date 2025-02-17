@@ -31,7 +31,8 @@ void *ck_hdr_end(hdr_t *h) {
 
 // is ptr in <h>?
 unsigned ck_ptr_in_block(hdr_t *h, void *ptr) {
-    unimplemented();
+    // unimplemented();
+    return (ptr >= ck_hdr_start(h)) && (ptr < ck_hdr_end(h));
 }
 
 
@@ -55,7 +56,7 @@ void (ckfree)(void *addr, src_loc_t l) {
     loc_debug(l, "freeing %p\n", addr);
     
     h->state = FREED;
-    unimplemented();
+    // unimplemented();
     assert(ck_ptr_is_alloced(addr));
     kr_free(h);
 }
@@ -73,5 +74,8 @@ void *(ckalloc)(unsigned nbytes, src_loc_t l) {
     memset(h, 0, sizeof *h);
     loc_debug(l, "allocating %p\n", h);
 
-    unimplemented();
+    // unimplemented();
+    h->next = alloc_list;
+    alloc_list = h;
+    return &h[1];
 }

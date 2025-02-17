@@ -23,17 +23,60 @@ void generic_call_int(int_fp *intv, unsigned n) {
         intv[i]();
 }
 
-// you will generate this dynamically.
+//edited here: replaced static definition with a function pointer dispatch.
+static void (*specialized_call_fn)(void) = 0;
+
+//edited here: our outward-facing specialized_call_int calls the generated code.
 void specialized_call_int(void) {
-    int_0();
-    int_1();
-    int_2();
-    int_3();
-    int_4();
-    int_5();
-    int_6();
-    int_7();
+    // int_0();
+    // int_1();
+    // int_2();
+    // int_3();
+    // int_4();
+    // int_5();
+    // int_6();
+    // int_7();
+    specialized_call_fn();
 }
+
+//edited here: helper to compute a BL or B instruction.
+static inline uint32_t arm_bl(uint32_t pc, uint32_t target) {
+    int32_t off = ((int32_t)target - ((int32_t)pc + 8)) >> 2;
+    return 0xeb000000 | (off & 0x00ffffff);
+}
+static inline uint32_t arm_b(uint32_t pc, uint32_t target) {
+    int32_t off = ((int32_t)target - ((int32_t)pc + 8)) >> 2;
+    return 0xea000000 | (off & 0x00ffffff);
+}
+
+//edited here: compile a specialized sequence that directly calls each handler.
+static void *int_compile(int_fp *intv, unsigned n) {
+    static uint32_t code[64];
+    unsigned idx = 0;
+
+    // push {lr} => store lr onto stack
+    code[idx++] = 0xe92d4000; // push {lr}
+
+    // for all but last: do a BL <handler>
+    for(unsigned i = 0; i < n - 1; i++) {
+        uint32_t pc = (uint32_t)&code[idx];
+        code[idx++] = arm_bl(pc, (uint32_t)intv[i]);
+    }
+
+    // pop {lr}
+    code[idx++] = 0xe8bd4000; // pop {lr}
+
+    // final call: do a B <handler> so it returns to original caller
+    {
+        uint32_t pc = (uint32_t)&code[idx];
+        code[idx++] = arm_b(pc, (uint32_t)intv[n - 1]);
+    }
+
+    // return the start of the code
+    return code;
+}
+
+//everything above until generic call is new
 
 void notmain(void) {
     int_fp intv[] = {
@@ -61,9 +104,11 @@ void notmain(void) {
     TIME_CYC_PRINT10("cost of generic-int calling",  generic_call_int(intv,n));
     demand(cnt == n*10, "cnt=%d, expected=%d\n", cnt, n*10);
 
-    // rewrite to generate specialized caller dynamically.
+    //edited here: compile a specialized sequence dynamically
+    specialized_call_fn = int_compile(intv, n);
+
     cnt = 0;
-    TIME_CYC_PRINT10("cost of specialized int calling", specialized_call_int() );
+    TIME_CYC_PRINT10("cost of specialized int calling", specialized_call_int());
     demand(cnt == n*10, "cnt=%d, expected=%d\n", cnt, n*10);
 
     clean_reboot();
