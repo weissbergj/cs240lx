@@ -1,6 +1,8 @@
 ## CS240lx: advanced operating system lab, accelerated
 ### Engler + Akshay, Spr 2022.
 
+JARED HERE: I did lab 1 and lab24.
+
 tl;dr index:
 
   - [This is a lab class and here are the labs](./labs/README.md).
